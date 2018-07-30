@@ -1,4 +1,4 @@
-list.of.packages <- c("data.table","WDI","reshape2","plm")
+list.of.packages <- c("data.table","WDI","reshape2","plm","stargazer")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) install.packages(new.packages)
 lapply(list.of.packages, require, character.only=T)
@@ -62,3 +62,9 @@ fixed = plm(
   ,model="within"
 )
 summary(fixed)
+
+stargazer(fit,fixed,type="html",
+          dep.var.labels=c("GDP growth (annual %)"),
+          covariate.labels=c("Education ODA Commitments (%/GDP)","Health ODA Commitments (%/GDP)"),
+          out="models.htm"
+          )
