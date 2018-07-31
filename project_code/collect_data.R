@@ -12,7 +12,8 @@ if(.Platform$OS.type == "unix"){
 wd = paste0(prefix,"/git/p20_hum_cap")
 setwd(wd)
 
-crs = read_csv("project_data/CRS1_educ_health.csv")
+load("project_data/crs_health_educ_oda.RData")
+setnames(crs,"RecipientCode","RECIPIENT")
 codes = read_csv("project_data/country_codes.csv")
 missing.codes = setdiff(crs$RECIPIENT,codes$RECIPIENT)
 missing.code.names = unique(crs$Recipient[which(crs$RECIPIENT %in% missing.codes)])
@@ -21,8 +22,9 @@ missing.code.names = missing.code.names[order(missing.code.names)]
 crs = merge(crs,codes,by="RECIPIENT")
 crs = subset(crs,!is.na(ISO_A3))
 
-crs$value_nominal = crs$Value*1000000
-merge.WDI = function(df,indicator,varname,start=1990,end=2018){
+crs$commitment_value_nominal = crs$commitment_value*1000000
+crs$disbursement_value_nominal = crs$disbursement_value*1000000
+merge.WDI = function(df,indicator,varname,start=1960,end=2018){
   wdi_tmp = WDI(indicator,country="all",extra=T,start=start,end=end)
   keep = c("iso3c","year",indicator)
   wdi_tmp = wdi_tmp[keep]
@@ -31,29 +33,30 @@ merge.WDI = function(df,indicator,varname,start=1990,end=2018){
   return(df)
 }
 
-keep = c("country","ISO_A3","Year","SECTOR","Flow_type","value_nominal")
-setnames(crs,"Flow type","Flow_type")
+keep = c("country","ISO_A3","Year","metaSector","commitment_value_nominal","disbursement_value_nominal")
+crs = data.frame(crs)
 crs = crs[keep]
 
 crs = merge.WDI(crs,"SP.POP.TOTL","pop")
-crs$value_per_cap = crs$value_nominal/crs$pop
-crs$value_nominal = NULL
-crs_melt = melt(crs,id.vars=c("country","ISO_A3","Year","SECTOR","Flow_type","pop"))
-crs_wide = dcast(crs_melt,country+ISO_A3+Year+pop~variable+SECTOR+Flow_type)
-names(crs_wide) = make.names(names(crs_wide))
+crs$disbursement_value_per_cap = crs$disbursement_value_nominal/crs$pop
+crs$commitment_value_per_cap = crs$commitment_value_nominal/crs$pop
+crs$disbursement_value_nominal = NULL
+crs$commitment_value_nominal = NULL
+crs_melt = melt(crs,id.vars=c("country","ISO_A3","Year","metaSector","pop"))
+crs_wide = dcast(crs_melt,country+ISO_A3+Year+pop~variable+metaSector)
 
-crs_wide = merge.WDI(crs_wide,"SI.POV.DDAY","pov")
+crs_wide = merge.WDI(crs_wide,"NY.GDP.PCAP.KD","gdp.pc")
 
 # Fixed effects
 fixed = plm(
-  pov~value_per_cap_110_Commitments+value_per_cap_120_Commitments
+  gdp.pc~disbursement_value_per_cap_11+disbursement_value_per_cap_12
   ,data=crs_wide
   ,index=c("ISO_A3","Year")
   ,model="within"
 )
 
 fixed2 = plm(
-  pov~value_per_cap_110_Commitments+value_per_cap_110_Gross.Disbursements+value_per_cap_120_Commitments+value_per_cap_120_Gross.Disbursements
+  gdp.pc~commitment_value_per_cap_11+disbursement_value_per_cap_11+commitment_value_per_cap_12+disbursement_value_per_cap_12
   ,data=crs_wide
   ,index=c("ISO_A3","Year")
   ,model="within"
@@ -63,7 +66,7 @@ crs_wide = merge.WDI(crs_wide,"SE.XPD.TOTL.GD.ZS","education.expenditure")
 crs_wide = merge.WDI(crs_wide,"SH.XPD.CHEX.GD.ZS","health.expenditure")
 
 fixed3 = plm(
-  lag(pov,5)~value_per_cap_110_Commitments+value_per_cap_110_Gross.Disbursements+education.expenditure+value_per_cap_120_Commitments+value_per_cap_120_Gross.Disbursements+health.expenditure
+  lag(gdp.pc,5)~commitment_value_per_cap_11+disbursement_value_per_cap_11+education.expenditure+commitment_value_per_cap_12+disbursement_value_per_cap_12+health.expenditure
   ,data=crs_wide
   ,index=c("ISO_A3","Year")
   ,model="within"
