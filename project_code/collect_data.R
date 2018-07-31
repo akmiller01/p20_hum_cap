@@ -21,50 +21,59 @@ missing.code.names = missing.code.names[order(missing.code.names)]
 crs = merge(crs,codes,by="RECIPIENT")
 crs = subset(crs,!is.na(ISO_A3))
 
-indicator = "NY.GDP.MKTP.CD"
-gdp_current = WDI(indicator,country="all",extra=T,start=1990,end=2018)
-keep = c("iso3c","year",indicator)
-gdp_current = gdp_current[keep]
-names(gdp_current) = c("ISO_A3","Year","gdp.current")
-missing.gdp = setdiff(crs$ISO_A3,gdp_current$ISO_A3)
-missing.gdp.names = unique(crs$Recipient[which(crs$ISO_A3 %in% missing.gdp)])
-missing.gdp.names = missing.gdp.names[order(missing.gdp.names)]
-
-crs = merge(crs,gdp_current,by=c("ISO_A3","Year"))
-crs = subset(crs,!is.na(gdp.current))
-
 crs$value_nominal = crs$Value*1000000
-crs$value_per_gdp = crs$value_nominal/crs$gdp.current
+merge.WDI = function(df,indicator,varname,start=1990,end=2018){
+  wdi_tmp = WDI(indicator,country="all",extra=T,start=start,end=end)
+  keep = c("iso3c","year",indicator)
+  wdi_tmp = wdi_tmp[keep]
+  names(wdi_tmp) = c("ISO_A3","Year",varname)
+  df = merge(df,wdi_tmp,by=c("ISO_A3","Year"))
+  return(df)
+}
 
-keep = c("country","ISO_A3","Year","SECTOR","Flow_type","value_per_gdp")
+keep = c("country","ISO_A3","Year","SECTOR","Flow_type","value_nominal")
 setnames(crs,"Flow type","Flow_type")
-crs_melt = melt(crs[keep],id.vars=c("country","ISO_A3","Year","SECTOR","Flow_type"))
-crs_wide = dcast(crs_melt,country+ISO_A3+Year~variable+SECTOR+Flow_type)
+crs = crs[keep]
+
+crs = merge.WDI(crs,"SP.POP.TOTL","pop")
+crs$value_per_cap = crs$value_nominal/crs$pop
+crs$value_nominal = NULL
+crs_melt = melt(crs,id.vars=c("country","ISO_A3","Year","SECTOR","Flow_type","pop"))
+crs_wide = dcast(crs_melt,country+ISO_A3+Year+pop~variable+SECTOR+Flow_type)
 names(crs_wide) = make.names(names(crs_wide))
 
-indicator = "NY.GDP.MKTP.KD.ZG"
-gdp_growth = WDI(indicator,country="all",extra=T,start=1990,end=2018)
-keep = c("iso3c","year",indicator)
-gdp_growth = gdp_growth[keep]
-names(gdp_growth) = c("ISO_A3","Year","gdp.growth")
-
-crs_wide = merge(crs_wide,gdp_growth,by=c("ISO_A3","Year"))
-
-# OLS
-fit = lm(gdp.growth~value_per_gdp_110_Commitments+value_per_gdp_120_Commitments,data=crs_wide)
-summary(fit)
+crs_wide = merge.WDI(crs_wide,"SI.POV.DDAY","pov")
 
 # Fixed effects
 fixed = plm(
-  gdp.growth~value_per_gdp_110_Commitments+value_per_gdp_120_Commitments
+  pov~value_per_cap_110_Commitments+value_per_cap_120_Commitments
+  ,data=crs_wide
+  ,index=c("ISO_A3","Year")
+  ,model="within"
+)
+
+fixed2 = plm(
+  pov~value_per_cap_110_Commitments+value_per_cap_110_Gross.Disbursements+value_per_cap_120_Commitments+value_per_cap_120_Gross.Disbursements
+  ,data=crs_wide
+  ,index=c("ISO_A3","Year")
+  ,model="within"
+)
+
+crs_wide = merge.WDI(crs_wide,"SE.XPD.TOTL.GD.ZS","education.expenditure")
+crs_wide = merge.WDI(crs_wide,"SH.XPD.CHEX.GD.ZS","health.expenditure")
+
+fixed3 = plm(
+  lag(pov,5)~value_per_cap_110_Commitments+value_per_cap_110_Gross.Disbursements+education.expenditure+value_per_cap_120_Commitments+value_per_cap_120_Gross.Disbursements+health.expenditure
   ,data=crs_wide
   ,index=c("ISO_A3","Year")
   ,model="within"
 )
 summary(fixed)
+summary(fixed2)
+summary(fixed3)
 
-stargazer(fit,fixed,type="html",
-          dep.var.labels=c("GDP growth (annual %)"),
-          covariate.labels=c("Education ODA Commitments (%/GDP)","Health ODA Commitments (%/GDP)"),
-          out="models.htm"
-          )
+# stargazer(fit,fixed,type="html",
+#           dep.var.labels=c("GDP growth (annual %)"),
+#           covariate.labels=c("Education ODA Commitments (%/GDP)","Health ODA Commitments (%/GDP)"),
+#           out="models.htm"
+#           )
