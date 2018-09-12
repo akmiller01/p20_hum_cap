@@ -10,12 +10,11 @@ if(.Platform$OS.type == "unix"){
 }
 
 
-load("C:/Users/Zach/Documents/ITEP 2018/Human Capital/CRSraw.RData")
-crs=subset(crs, FlowName=="ODA Grants" | FlowName=="ODA Loans")
+load("project_data/crs.RData")
+crs=subset(crs, FlowName=="ODA Grants" | FlowName=="ODA Loans"|FlowName=="Equity Investment")
 crs$usd_commitment_defl[which(crs$Year==2006)]=crs$usd_commitment_defl[which(crs$Year==2006)]*10
 crs$social=0
 crs$social[which(crs$PurposeCode>16000 & crs$PurposeCode<16020)]=crs$usd_commitment_defl[which(crs$PurposeCode>16000 & crs$PurposeCode<16020)]
-
 
 
 
