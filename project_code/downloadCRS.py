@@ -12,7 +12,8 @@ def unzip(source_filename, dest_dir):
 
 url = "https://stats.oecd.org/DownloadFiles.aspx?DatasetCode=CRS1"
 dataRoot = "https://stats.oecd.org/FileView2.aspx?IDFile="
-filePath = "/home/alex/git/p20_hum_cap/project_data/zips"
+dir_path = os.path.dirname(os.path.realpath(__file__))
+filePath = os.path.join(dir_path, "../project_data/zips")
 
 download_page = requests.get(url).content
 soup = BeautifulSoup(download_page,"lxml")
